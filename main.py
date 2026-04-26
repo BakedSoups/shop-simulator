@@ -51,7 +51,6 @@ class Config:
         "grabber": 80.0,
         "buffer_crate": 60.0,
         "worker": 80.0,
-        "seed_bundle": 20.0,
     }
     PRODUCT_PRICE = 12.0
     UI_BG = (29, 34, 40)
@@ -60,12 +59,12 @@ class Config:
     UI_TEXT = (230, 234, 238)
     UI_MUTED = (145, 154, 163)
     UI_ACCENT = (255, 193, 87)
-    SOIL_STATES = ("dry", "wet", "planted", "ready")
+    SOIL_STATES = ("dry", "planted", "ready")
     FARM_TILES = [(3, 5), (5, 5), (3, 7), (5, 7)]
     FARM_STARTER_STATES = {
         (3, 5): ("ready", SOIL_GROWTH_TIME),
         (5, 5): ("planted", SOIL_GROWTH_TIME * 0.45),
-        (3, 7): ("wet", 0.0),
+        (3, 7): ("dry", 0.0),
         (5, 7): ("planted", SOIL_GROWTH_TIME * 0.15),
     }
     ASSET_ROOT = Path(__file__).resolve().parent / "assets"
@@ -75,7 +74,6 @@ ASSET_MANIFEST = {
     "tiles/floor_farm.png": ((40, 40), (139, 195, 74), "", (255, 255, 255), "rect", (110, 160, 55)),
     "tiles/floor_store.png": ((40, 40), (240, 230, 210), "", (200, 180, 150), "rect", (200, 185, 165)),
     "tiles/soil_dry.png": ((40, 40), (139, 115, 85), "", (255, 255, 255), "rect", (100, 80, 55)),
-    "tiles/soil_wet.png": ((40, 40), (101, 80, 55), "", (255, 255, 255), "rect", (70, 50, 30)),
     "tiles/soil_planted.png": ((40, 40), (101, 80, 55), "o", (100, 220, 80), "rect", (70, 50, 30)),
     "tiles/soil_ready.png": ((40, 40), (101, 80, 55), "*", (100, 255, 80), "rect", (70, 50, 30)),
     "tiles/wall.png": ((40, 40), (60, 60, 70), "", (255, 255, 255), "rect", (40, 40, 50)),
@@ -86,6 +84,8 @@ ASSET_MANIFEST = {
     "tiles/furniture/shelf.png": ((40, 40), (160, 110, 60), "SHELF", (255, 240, 200), "rect", (120, 80, 30)),
     "tiles/furniture/register.png": ((40, 40), (60, 180, 100), "REG", (255, 255, 255), "rect", (30, 140, 70)),
     "tiles/furniture/storage_crate.png": ((40, 40), (70, 130, 200), "CRATE", (255, 255, 255), "rect", (40, 90, 160)),
+    "tiles/furniture/seed_bucket.png": ((40, 40), (201, 156, 84), "SEED", (255, 248, 230), "rect", (150, 110, 48)),
+    "tiles/furniture/fertilizer_bucket.png": ((40, 40), (118, 90, 72), "FERT", (255, 248, 230), "rect", (83, 60, 45)),
     "tiles/furniture/counter.png": ((40, 40), (200, 180, 150), "CNTR", (120, 100, 70), "rect", (160, 140, 110)),
     "tiles/furniture/entrance.png": ((40, 40), (255, 220, 50), "ENTER", (120, 80, 0), "rect", (200, 160, 0)),
     "tiles/furniture/door.png": ((40, 40), (120, 80, 40), "DOOR", (255, 240, 200), "rect", (85, 55, 25)),
@@ -131,6 +131,8 @@ class AssetManager:
         self.custom_carrot_stage_names: list[str] = []
         self.custom_full_carrot_name: str | None = None
         self.custom_player_name: str | None = None
+        self.alex_idle_sheet: pygame.Surface | None = None
+        self.alex_run_sheet: pygame.Surface | None = None
         self.generate_placeholder_assets()
         self.load_assets()
         self.load_optional_custom_assets()
@@ -207,6 +209,22 @@ class AssetManager:
             key = f"custom/{path.stem}"
             self.assets[key] = pygame.image.load(path).convert_alpha()
             self.custom_player_name = key
+        alex_idle = Path(__file__).resolve().parent / "pixel_assets/Characters_free/Alex_idle_16x16.png"
+        alex_run = Path(__file__).resolve().parent / "pixel_assets/Characters_free/Alex_run_16x16.png"
+        if alex_idle.exists():
+            self.alex_idle_sheet = pygame.image.load(alex_idle).convert_alpha()
+        if alex_run.exists():
+            self.alex_run_sheet = pygame.image.load(alex_run).convert_alpha()
+
+    def extract_trimmed_frame(self, sheet: pygame.Surface, frame_rect: pygame.Rect, pad: int = 1) -> pygame.Surface:
+        frame = pygame.Surface(frame_rect.size, pygame.SRCALPHA)
+        frame.blit(sheet, (0, 0), frame_rect)
+        bounds = frame.get_bounding_rect()
+        if bounds.width == 0 or bounds.height == 0:
+            return frame
+        trimmed = pygame.Surface((bounds.width + pad * 2, bounds.height + pad * 2), pygame.SRCALPHA)
+        trimmed.blit(frame, (pad - bounds.x, pad - bounds.y))
+        return trimmed
 
     def get(self, name: str) -> pygame.Surface:
         return self.assets[name]
@@ -282,8 +300,6 @@ class Tile:
     def reset_soil_visual(self):
         if self.soil_state == "dry":
             self.asset_name = "tiles/soil_dry.png"
-        elif self.soil_state == "wet":
-            self.asset_name = "tiles/soil_wet.png"
         elif self.soil_state == "planted":
             self.asset_name = "tiles/soil_planted.png"
         elif self.soil_state == "ready":
@@ -385,9 +401,6 @@ class Grid:
                     self.set_tile(x, y, "floor", "tiles/floor_store.png")
                 else:
                     self.set_tile(x, y, "floor", "tiles/floor_farm.png")
-        for x in range(Config.MAP_WIDTH):
-            for y in range(0, 3):
-                self.set_tile(x, y, "wall", "tiles/wall.png", walkable=False)
         for x, y in Config.FARM_TILES:
             tile = self.get(x, y)
             tile.type = "soil"
@@ -401,7 +414,11 @@ class Grid:
             self.set_tile(25, y, "wall", "tiles/wall.png", walkable=False)
         self.set_tile(25, 8, "door", "tiles/furniture/door.png", walkable=True)
         self.set_tile(26, 8, "entrance", "tiles/furniture/entrance.png")
-        self.storage_positions.append((8, 8))
+        self.storage_positions.extend([(7, 4), (8, 4)])
+        for x in range(20, 25):
+            for y in range(4, 13):
+                if x in (20, 24) or y in (4, 12):
+                    self.set_tile(x, y, "shop_border", "tiles/soil_dry.png")
         self.shelf_positions.append((22, 6))
         self.machine_positions.append((10, 6))
         for x in range(26, 32):
@@ -462,13 +479,24 @@ class Machine:
             self.progress = 0.0
 
     def draw_overlay(self, surface: pygame.Surface, camera: "Camera"):
+        x, y = camera.world_to_screen(*self.pos)
+        tile_size = int(Config.TILE_SIZE * camera.zoom)
         if self.processing_item:
-            x, y = camera.world_to_screen(*self.pos)
-            bar = pygame.Rect(x, y + int(Config.TILE_SIZE * camera.zoom) + 2, int(Config.TILE_SIZE * camera.zoom), 6)
-            pygame.draw.rect(surface, (20, 20, 20), bar)
+            bar = pygame.Rect(x, y - 10, tile_size, 8)
+            pygame.draw.rect(surface, (18, 22, 26), bar, border_radius=4)
             fill = bar.copy()
-            fill.width = int(fill.width * self.progress)
-            pygame.draw.rect(surface, (91, 217, 124), fill)
+            fill.width = max(2, int(fill.width * self.progress))
+            pygame.draw.rect(surface, (91, 217, 124), fill, border_radius=4)
+        if self.output_item:
+            done_badge = pygame.Rect(x + tile_size - 22, y - 26, 26, 16)
+            pygame.draw.rect(surface, (66, 170, 92), done_badge, border_radius=4)
+            done_text = self.game.assets.font(max(10, int(10 * camera.zoom)), bold=True).render("DONE", True, (255, 255, 255))
+            surface.blit(done_text, done_text.get_rect(center=done_badge.center))
+            icon = self.game.assets.get(self.output_item.asset_name)
+            icon_size = max(12, int(icon.get_width() * camera.zoom))
+            icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+            icon_rect = icon.get_rect(center=(x + tile_size // 2, y + tile_size // 2))
+            surface.blit(icon, icon_rect)
 
 
 class StorageCrate(Machine):
@@ -493,6 +521,21 @@ class StorageCrate(Machine):
 
     def count(self, item_type: str) -> int:
         return sum(1 for item in self.items if item.item_type == item_type)
+
+    def update(self, dt: float):
+        return
+
+
+class SupplyContainer(Machine):
+    walkable_through = False
+
+    def __init__(self, game: "Game", pos: tuple[int, int], supply_item_type: str, label: str):
+        asset_name = {
+            "seed": "tiles/furniture/seed_bucket.png",
+            "fertilizer": "tiles/furniture/fertilizer_bucket.png",
+        }.get(supply_item_type, "tiles/furniture/storage_crate.png")
+        super().__init__(game, pos, asset_name, label, None, None, 0.0)
+        self.supply_item_type = supply_item_type
 
     def update(self, dt: float):
         return
@@ -578,9 +621,6 @@ class Sprinkler(Machine):
                 tile = self.game.grid.get(x, y)
                 if tile and tile.is_soil():
                     tile.watered = True
-                    if tile.soil_state == "dry":
-                        tile.soil_state = "wet"
-                        tile.reset_soil_visual()
 
 
 class GrabberArm(Machine):
@@ -806,7 +846,7 @@ class Worker(Agent):
                 self.assign_walk((tile.x, tile.y), "Water")
                 return
         for tile in self.game.soil_tiles():
-            if tile.soil_state == "wet" and self.game.seed_count() > 0:
+            if tile.soil_state == "dry":
                 self.assign_walk((tile.x, tile.y), "Plant")
                 return
         self.current_task = "Idle"
@@ -853,16 +893,12 @@ class Worker(Agent):
     def perform_task(self, dt: float):
         tile = self.game.grid.get(*self.tile_pos)
         if self.worker_type == "farmer":
-            if self.current_task == "Water" and tile and tile.soil_state == "dry":
-                tile.soil_state = "wet"
-                tile.watered = True
-                tile.reset_soil_visual()
-                self.finish_task("Farmer watered soil.")
-            elif self.current_task == "Plant" and tile and tile.soil_state == "wet" and self.game.consume_seed():
+            if self.current_task == "Plant" and tile and tile.soil_state == "dry":
                 tile.soil_state = "planted"
                 tile.growth_timer = 0.0
+                tile.watered = True
                 tile.reset_soil_visual()
-                self.finish_task("Farmer planted seed.")
+                self.finish_task("Farmer planted crop.")
             elif self.current_task == "Harvest" and tile and tile.soil_state == "ready":
                 if self.game.deposit_raw_crop():
                     tile.soil_state = "dry"
@@ -972,7 +1008,6 @@ class PlayerController:
     def __init__(self, game: "Game"):
         self.game = game
         self.held_item: Item | None = None
-        self.watering_can_full = False
         start = (8, 8)
         self.x = start[0] * Config.TILE_SIZE + Config.TILE_SIZE / 2
         self.y = start[1] * Config.TILE_SIZE + Config.TILE_SIZE / 2
@@ -983,10 +1018,12 @@ class PlayerController:
         self.state = "IDLE"
         self.last_grid_tile = start
         self.focus_offset = (1, 0)
+        self.anim_time = 0.0
+        self.step_timer = 0.0
 
     def __repr__(self):
         held = self.held_item.item_type if self.held_item else None
-        return f"PlayerController(held={held}, watering={self.watering_can_full})"
+        return f"PlayerController(held={held})"
 
     @property
     def tile_pos(self) -> tuple[int, int]:
@@ -1004,15 +1041,16 @@ class PlayerController:
             self.last_grid_tile = current_tile
 
     def draw(self, surface: pygame.Surface, camera: Camera, assets: AssetManager):
-        sprite = assets.get(self.asset_name)
-        x = int((self.x - sprite.get_width() / 2 - camera.offset_x) * camera.zoom)
-        y = int((self.y - sprite.get_height() / 2 - camera.offset_y) * camera.zoom)
+        sprite = self.current_sprite(assets)
         if camera.zoom != 1.0:
             sprite = pygame.transform.smoothscale(
                 sprite,
                 (max(1, int(sprite.get_width() * camera.zoom)), max(1, int(sprite.get_height() * camera.zoom))),
             )
-        surface.blit(sprite, (x, y))
+        feet_x = int((self.x - camera.offset_x) * camera.zoom)
+        feet_y = int((self.y - camera.offset_y) * camera.zoom)
+        rect = sprite.get_rect(midbottom=(feet_x, feet_y + int(Config.TILE_SIZE * 0.35 * camera.zoom)))
+        surface.blit(sprite, rect)
         if self.held_item:
             held_sprite_name = self.held_item.asset_name
             if self.held_item.item_type == "crop_raw" and assets.custom_full_carrot_name:
@@ -1023,15 +1061,37 @@ class PlayerController:
             target_h = max(14, int(sprite.get_height() * 0.9))
             target_w = max(12, int(held_sprite.get_width() * (target_h / max(1, held_sprite.get_height()))))
             held_sprite = pygame.transform.smoothscale(held_sprite, (target_w, target_h))
-            rect = held_sprite.get_rect(
+            held_rect = held_sprite.get_rect(
                 center=(
-                    x + sprite.get_width() // 2,
-                    y - max(10, int(16 * camera.zoom)),
+                    rect.centerx,
+                    rect.top - max(8, int(10 * camera.zoom)),
                 )
             )
-            surface.blit(held_sprite, rect)
+            surface.blit(held_sprite, held_rect)
+
+    def current_sprite(self, assets: AssetManager) -> pygame.Surface:
+        direction_index = {
+            (1, 0): 0,
+            (0, -1): 1,
+            (-1, 0): 2,
+            (0, 1): 3,
+        }.get(self.focus_offset, 0)
+        if self.state == "WALKING" and assets.alex_run_sheet is not None:
+            frame = int(self.anim_time * 10) % 6
+            return self.slice_sheet_frame(assets.alex_run_sheet, direction_index * 6 + frame)
+        if assets.alex_idle_sheet is not None:
+            return self.slice_sheet_frame(assets.alex_idle_sheet, direction_index)
+        return assets.get(self.asset_name)
+
+    def slice_sheet_frame(self, sheet: pygame.Surface, frame_index: int) -> pygame.Surface:
+        frame_w = 16
+        frame_h = 16
+        rect = pygame.Rect(frame_index * frame_w, 0, frame_w, frame_h)
+        return self.game.assets.extract_trimmed_frame(sheet, rect)
 
     def update(self, dt: float):
+        self.anim_time += dt
+        self.step_timer = max(0.0, self.step_timer - dt)
         if self.path:
             next_tile = self.path[0]
             target_x = next_tile[0] * Config.TILE_SIZE + Config.TILE_SIZE / 2
@@ -1057,22 +1117,20 @@ class PlayerController:
         else:
             self.state = "IDLE"
 
-    def manual_move(self, dx: float, dy: float, dt: float):
-        if self.path:
+    def try_step(self, dx: int, dy: int):
+        if self.path or self.step_timer > 0.0:
             return
         if dx == 0 and dy == 0:
             return
-        length = math.hypot(dx, dy)
-        dx /= length
-        dy /= length
-        next_x = self.x + dx * self.speed * dt
-        next_y = self.y + dy * self.speed * dt
-        target_tile = self.game.grid.get(int(next_x // Config.TILE_SIZE), int(next_y // Config.TILE_SIZE))
+        self.focus_offset = (dx, dy)
+        current_x, current_y = self.tile_pos
+        target_tile = self.game.grid.get(current_x + dx, current_y + dy)
         if target_tile and self.game.grid.is_walkable(target_tile.x, target_tile.y):
-            self.x = next_x
-            self.y = next_y
+            self.x = target_tile.x * Config.TILE_SIZE + Config.TILE_SIZE / 2
+            self.y = target_tile.y * Config.TILE_SIZE + Config.TILE_SIZE / 2
             self.refresh_focus_from_grid_step()
             self.state = "WALKING"
+            self.step_timer = 0.14
 
     def command_move_to(self, tile: Tile):
         target = self.game.get_interaction_tile(tile)
@@ -1094,23 +1152,22 @@ class PlayerController:
         self.held_item = None
 
     def interact(self, tile: Tile):
-        if tile.type == "water":
-            self.watering_can_full = True
-            self.game.log.add("Watering can refilled.", (110, 200, 255))
-            return
         if tile.is_soil():
-            if tile.soil_state == "dry" and self.watering_can_full:
-                tile.soil_state = "wet"
-                tile.watered = True
-                tile.reset_soil_visual()
-                self.watering_can_full = False
-                self.game.log.add("Watered soil.")
-                return
-            if tile.soil_state == "wet" and self.game.consume_seed():
+            if tile.soil_state == "dry" and self.held_item and self.held_item.item_type == "seed":
                 tile.soil_state = "planted"
                 tile.growth_timer = 0.0
+                tile.watered = True
                 tile.reset_soil_visual()
-                self.game.log.add("Planted a seed.")
+                self.game.log.add("Planted crop.")
+                return
+            if tile.soil_state == "dry":
+                self.game.log.add("Pick up seeds first.", (255, 180, 120))
+                return
+            if tile.soil_state == "planted" and self.held_item and self.held_item.item_type == "fertilizer":
+                tile.soil_state = "ready"
+                tile.growth_timer = Config.SOIL_GROWTH_TIME
+                tile.reset_soil_visual()
+                self.game.log.add("Fertilized crop to full growth.")
                 return
             if tile.soil_state == "ready":
                 if self.try_hold("crop_raw"):
@@ -1222,10 +1279,8 @@ class UI:
         held_name = self.game.player.held_item.item_type if self.game.player.held_item else "empty"
         held_text = self.game.assets.font(14).render(held_name.replace("_", " "), True, Config.UI_TEXT)
         surface.blit(held_text, (60, rect.y + 30))
-        seeds = self.game.assets.font(14).render(f"Seeds: {self.game.seed_count()}", True, Config.UI_TEXT)
-        surface.blit(seeds, (220, rect.y + 22))
         text = self.game.assets.font(14).render("WASD move  K interact  B build  F1 debug", True, Config.UI_TEXT)
-        surface.blit(text, (360, rect.y + 22))
+        surface.blit(text, (220, rect.y + 22))
 
     def draw_build_panel(self, surface: pygame.Surface):
         rect = self.build_panel_rect()
@@ -1302,7 +1357,6 @@ class Game:
         self.customer_spawn_timer = 0.0
         self.next_customer_spawn = random.uniform(10.0, 20.0)
         self.player = PlayerController(self)
-        self.global_seed_stock = 0
         self.workers: list[Worker] = []
         self.customers: list[Customer] = []
         self.register_staff: dict[Register, Worker | None] = {}
@@ -1323,12 +1377,14 @@ class Game:
             self.place_machine(shelf)
             self.shelves.append(shelf)
         for pos in self.grid.storage_positions:
-            crate = StorageCrate(self, pos)
             if pos == self.grid.storage_positions[0]:
-                for _ in range(10):
-                    crate.items.append(Item("seed"))
+                crate = SupplyContainer(self, pos, "seed", "seed bucket")
+            elif pos == self.grid.storage_positions[1]:
+                crate = SupplyContainer(self, pos, "fertilizer", "fertilizer crate")
+            else:
+                crate = StorageCrate(self, pos)
+                self.crates.append(crate)
             self.place_machine(crate)
-            self.crates.append(crate)
         processor_specs = [
             ("juicer", "machines/juicer.png", "crop_raw", "juice_packaged"),
         ]
@@ -1354,7 +1410,7 @@ class Game:
                 continue
             tile.soil_state = state
             tile.growth_timer = timer
-            tile.watered = state in {"wet", "planted", "ready"}
+            tile.watered = state in {"planted", "ready"}
             tile.reset_soil_visual()
 
         starter_machines: list[Machine] = [Sprinkler(self, (4, 6))]
@@ -1363,7 +1419,6 @@ class Game:
                 self.place_machine(machine)
         if self.shelves:
             self.shelves[0].stock.extend([Item("juice_packaged")])
-        self.global_seed_stock = 6
 
     def setup_street_scene(self):
         parked_cars = [
@@ -1397,9 +1452,6 @@ class Game:
                 if tile.is_soil():
                     yield tile
 
-    def seed_count(self) -> int:
-        return self.global_seed_stock
-
     def shelf_line_customers(self) -> list[Customer]:
         return [
             customer
@@ -1428,16 +1480,6 @@ class Game:
         line = self.shelf_line_customers()
         return bool(line) and line[0] is customer
 
-    def consume_seed(self) -> bool:
-        if self.global_seed_stock > 0:
-            self.global_seed_stock -= 1
-            return True
-        for crate in self.crates:
-            seed = crate.take_matching("seed")
-            if seed:
-                return True
-        return False
-
     def deposit_raw_crop(self, player_manual: bool = False) -> bool:
         if player_manual:
             return self.player.try_hold("crop_raw")
@@ -1463,6 +1505,16 @@ class Game:
                 self.log.add("Placed juice on shelf.")
             elif self.player.held_item:
                 self.log.add("Only finished juice goes on the shelf.", (255, 180, 120))
+        elif isinstance(entity, SupplyContainer):
+            if self.player.held_item is None:
+                if self.player.try_hold(entity.supply_item_type):
+                    self.log.add(f"Picked up {entity.supply_item_type}.")
+                return
+            if self.player.held_item.item_type == entity.supply_item_type:
+                self.player.clear_hand()
+                self.log.add(f"Put back {entity.supply_item_type}.")
+                return
+            self.log.add("Your hand is holding something else.", (255, 180, 120))
         elif isinstance(entity, StorageCrate):
             if self.player.held_item and entity.enqueue(Item(self.player.held_item.item_type)):
                 stored = self.player.held_item.item_type
@@ -1516,25 +1568,30 @@ class Game:
         return options[0][1]
 
     def find_nearest_interactable_tile(self) -> Tile | None:
+        focus_tile = self.player_focus_tile()
+        if focus_tile and focus_tile.is_soil() and focus_tile.soil_state == "ready":
+            return focus_tile
         px, py = self.player.tile_pos
-        candidates: list[tuple[int, int, Tile]] = []
-        for dx in range(-1, 2):
-            for dy in range(-1, 2):
-                tile = self.grid.get(px + dx, py + dy)
-                if tile is None:
-                    continue
-                if tile.is_soil() and tile.soil_state in {"ready", "wet"}:
-                    candidates.append((abs(dx) + abs(dy), 0, tile))
-                elif tile.entity and (
-                    isinstance(tile.entity, Processor)
-                    or isinstance(tile.entity, Shelf)
-                    or isinstance(tile.entity, StorageCrate)
-                ):
-                    candidates.append((abs(dx) + abs(dy), 1, tile))
-        if not candidates:
-            return None
-        candidates.sort(key=lambda entry: (entry[0], entry[1]))
-        return candidates[0][2]
+        current_tile = self.grid.get(px, py)
+        if current_tile and current_tile.is_soil() and current_tile.soil_state == "ready":
+            return current_tile
+        if focus_tile and self.is_interactable_tile(focus_tile):
+            return focus_tile
+        if current_tile and self.is_interactable_tile(current_tile):
+            return current_tile
+        return None
+
+    def is_interactable_tile(self, tile: Tile) -> bool:
+        if tile.is_soil() and tile.soil_state in {"ready", "dry", "planted"}:
+            return True
+        if tile.entity and (
+            isinstance(tile.entity, Processor)
+            or isinstance(tile.entity, Shelf)
+            or isinstance(tile.entity, SupplyContainer)
+            or isinstance(tile.entity, StorageCrate)
+        ):
+            return True
+        return False
 
     def player_focus_tile(self) -> Tile | None:
         px, py = self.player.tile_pos
@@ -1660,9 +1717,12 @@ class Game:
                     if self.camera.zoom != 1.0:
                         entity_sprite = pygame.transform.smoothscale(
                             entity_sprite,
-                            (int(Config.TILE_SIZE * self.camera.zoom), int(Config.TILE_SIZE * self.camera.zoom)),
+                            (
+                                max(1, int(entity_sprite.get_width() * self.camera.zoom)),
+                                max(1, int(entity_sprite.get_height() * self.camera.zoom)),
+                            ),
                         )
-                    world.blit(entity_sprite, (sx, sy))
+                    world.blit(entity_sprite, (sx, sy - entity_sprite.get_height() + int(Config.TILE_SIZE * self.camera.zoom)))
                 if tile.item:
                     item_sprite = self.assets.get(tile.item.asset_name)
                     if self.camera.zoom != 1.0:
@@ -1730,8 +1790,6 @@ class Game:
                 growth_ratio = max(0.0, min(0.999, tile.growth_timer / Config.SOIL_GROWTH_TIME))
                 index = min(len(self.assets.custom_carrot_stage_names) - 1, int(growth_ratio * len(self.assets.custom_carrot_stage_names)))
                 stage_name = self.assets.custom_carrot_stage_names[index]
-        elif tile.soil_state == "wet" and self.assets.custom_carrot_stage_names:
-            stage_name = self.assets.custom_carrot_stage_names[0]
         if stage_name is None:
             return
         sprite = self.assets.get(stage_name)
@@ -1856,16 +1914,14 @@ class Game:
         elif event.button == 1:
             if self.select_build_from_click(event.pos):
                 return
-            if event.pos[1] >= Config.VIEWPORT_HEIGHT or event.pos[0] >= Config.VIEWPORT_WIDTH:
-                return
-            tile_pos = self.camera.screen_to_world(*event.pos)
-            tile = self.grid.get(*tile_pos)
-            if not tile:
-                return
             if self.build_mode and self.selected_build:
+                if event.pos[1] >= Config.VIEWPORT_HEIGHT or event.pos[0] >= Config.VIEWPORT_WIDTH:
+                    return
+                tile_pos = self.camera.screen_to_world(*event.pos)
+                tile = self.grid.get(*tile_pos)
+                if not tile:
+                    return
                 self.attempt_build(tile)
-            else:
-                self.player.command_move_to(tile)
         elif event.button == 3:
             self.selected_build = None
             self.build_mode = False
@@ -1899,6 +1955,14 @@ class Game:
                     )
                 elif event.key == pygame.K_F1:
                     self.debug = not self.debug
+                elif event.key == pygame.K_w:
+                    self.player.try_step(0, -1)
+                elif event.key == pygame.K_a:
+                    self.player.try_step(-1, 0)
+                elif event.key == pygame.K_s:
+                    self.player.try_step(0, 1)
+                elif event.key == pygame.K_d:
+                    self.player.try_step(1, 0)
                 elif event.key == pygame.K_k:
                     tile = self.find_nearest_interactable_tile()
                     if tile:
@@ -1916,19 +1980,6 @@ class Game:
                     self.game_speed = max(1, self.game_speed // 2)
                 elif event.key == pygame.K_EQUALS:
                     self.game_speed = min(4, self.game_speed * 2)
-        keys = pygame.key.get_pressed()
-        move_x = 0.0
-        move_y = 0.0
-        if keys[pygame.K_a]:
-            move_x -= 1.0
-        if keys[pygame.K_d]:
-            move_x += 1.0
-        if keys[pygame.K_w]:
-            move_y -= 1.0
-        if keys[pygame.K_s]:
-            move_y += 1.0
-        self.player.manual_move(move_x, move_y, Config.FIXED_DT)
-
     def run(self):
         accumulator = 0.0
         while self.running:

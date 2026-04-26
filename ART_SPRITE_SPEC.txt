@@ -1,0 +1,260 @@
+Shop Simulator Art Spec
+
+Goal
+- Replace the current placeholder PNGs with a coherent pixel-art set that matches the current game layout and interactions.
+- Current world is a compact PlateUp-style room:
+  - modular carrot farm on the left
+  - juicer and supply area in the middle
+  - shelf/shop area on the right
+  - storefront wall + door + street outside
+
+Base Sizes
+- World tile size in game logic: 40x40
+- Source art can be 16x16, 32x32, or 48x48, but should be exported/cropped per usable object
+- Recommended final replacements:
+  - ground/walls/furniture/machines: one image per tile footprint
+  - hand-held items: small centered sprite with transparent padding
+  - character: directional or animated frames if available
+
+Current Placeholder Assets To Replace
+
+Ground / Terrain
+- tiles/floor_farm.png
+  - farm grass/dirt floor tile
+  - seamless tiling
+- tiles/floor_store.png
+  - indoor shop floor tile
+  - clean retail/interior floor
+- tiles/path.png
+  - sidewalk / transition path tile
+  - should tile seamlessly
+- tiles/road.png
+  - asphalt road tile
+  - add optional painted lane detail or curb edge variants later
+- tiles/soil_dry.png
+  - empty plantable farm tile
+- tiles/soil_planted.png
+  - planted but not grown tile
+- tiles/soil_ready.png
+  - fully grown / harvest-ready tile
+
+Walls / Storefront
+- tiles/wall.png
+  - placeholder is too generic
+  - should be broken into directional pieces
+- tiles/furniture/door.png
+  - storefront door
+- tiles/furniture/entrance.png
+  - exterior entrance/threshold tile
+
+Recommended wall set to make next
+- wall_center.png
+- wall_left_end.png
+- wall_right_end.png
+- wall_inner_corner_nw.png
+- wall_inner_corner_ne.png
+- wall_inner_corner_sw.png
+- wall_inner_corner_se.png
+- wall_outer_corner_nw.png
+- wall_outer_corner_ne.png
+- wall_outer_corner_sw.png
+- wall_outer_corner_se.png
+- wall_top_edge.png
+- wall_bottom_edge.png
+- wall_pillar.png
+- storefront_window_left.png
+- storefront_window_mid.png
+- storefront_window_right.png
+- storefront_door_left.png
+- storefront_door_center.png
+- storefront_door_right.png
+
+Farm Supplies
+- tiles/furniture/seed_bucket.png
+  - explicit seed container
+  - player can pick up seeds from it and return them
+- tiles/furniture/fertilizer_bucket.png
+  - explicit fertilizer container
+  - player can pick up fertilizer from it and return it
+- assets/items/fertilizer.png
+  - hand-held fertilizer item icon/sprite
+
+Farm Produce
+- custom carrot stages are already being read from:
+  - spr_carrot_stage*.png
+  - fallback: spr_carrot_*.png
+- full held harvest is read from:
+  - full_carrot.png
+
+Recommended carrot stage set
+- spr_carrot_stage_0.png
+  - just planted / tiny sprout
+- spr_carrot_stage_1.png
+  - early growth
+- spr_carrot_stage_2.png
+  - medium growth
+- spr_carrot_stage_3.png
+  - almost ready
+- spr_carrot_stage_4.png
+  - fully grown / ready
+- full_carrot.png
+  - harvested carrot used in hand over character head
+  - should read clearly when rotated and scaled down
+
+Machines
+- machines/juicer.png
+  - primary processing station
+  - should read as a countertop juicer or small machine
+- machines/sprinkler.png
+  - placed beside the modular farm
+  - should visually suggest 3x3 coverage / water pulse
+
+Optional future machine replacements still in manifest
+- machines/washer.png
+- machines/capper.png
+- machines/packager.png
+- machines/belt_h.png
+- machines/belt_v.png
+- machines/belt_tl.png
+- machines/belt_tr.png
+- machines/grabber.png
+- machines/harvester.png
+
+These are not all core to the current simplified loop, but if you want a complete set later they should share one visual language.
+
+Shop Fixtures
+- tiles/furniture/shelf.png
+  - main customer-facing product shelf
+  - should be readable from top-down, with visible front edge
+- tiles/furniture/counter.png
+  - support/prep counter
+- tiles/furniture/storage_crate.png
+  - generic crate/storage box for future item storage
+
+Recommended shop fixture additions
+- shelf_single.png
+- shelf_filled.png
+- shelf_empty.png
+- shelf_side_left.png
+- shelf_side_right.png
+- prep_counter.png
+- checkout_counter.png
+- backroom_storage.png
+- produce_display.png
+- wall_shelf.png
+- rug_shop_center.png
+- rug_shop_edge_h.png
+- rug_shop_edge_v.png
+- rug_shop_corner_nw.png
+- rug_shop_corner_ne.png
+- rug_shop_corner_sw.png
+- rug_shop_corner_se.png
+
+Character / Customer
+- player currently prefers custom player art if present
+- current custom player source detected:
+  - spr_bumpkin_*.png
+  - Alex_* 16x16 sheets also exist in repo
+
+Recommended player set
+- player_idle_down.png
+- player_idle_up.png
+- player_idle_left.png
+- player_idle_right.png
+- player_walk_down_0.png / _1.png
+- player_walk_up_0.png / _1.png
+- player_walk_left_0.png / _1.png
+- player_walk_right_0.png / _1.png
+
+Customer set
+- customer_idle_down.png
+- customer_idle_left.png
+- customer_idle_right.png
+- customer_idle_up.png
+
+If using a spritesheet instead of single frames, keep frame size documented in a separate note.
+
+Hand-Held Items
+- items/crop_raw.png
+  - if not using full_carrot.png directly everywhere
+- items/juice_packaged.png
+  - finished product in hand and on shelf
+- items/fertilizer.png
+- items/seed.png
+
+Recommended hand-item requirements
+- transparent padding
+- centered silhouette
+- readable at very small scale
+- strong outline against floor colors
+
+Exterior / Street
+- entities/car_red.png
+- entities/car_blue.png
+- entities/car_green.png
+  - can be replaced with one car base + palette swaps
+
+Recommended exterior additions
+- curb_edge_top.png
+- curb_edge_bottom.png
+- parking_line.png
+- sidewalk_tile.png
+- storefront_sign.png
+- exterior_planter.png
+
+Interior Sheet Ideas To Use
+- From the 48x48 interior sheet, strong candidates for this game are:
+  - shelves / bookcase-like fixtures for product shelves
+  - counters / desks for prep counters
+  - rugs to define shop zone
+  - door + window pieces for storefront wall
+  - cabinets for storage/back wall detail
+
+Suggested style mapping
+- Farm side:
+  - simple earthy, cozy, readable
+- Shop side:
+  - warm indoor floor, rug, wooden shelf, tidy counter
+- Exterior:
+  - curb, road, storefront threshold, cars
+
+Immediate High-Priority Images To Make
+- wall directional set
+- storefront door set
+- storefront windows
+- shelf sprite
+- counter sprite
+- seed bucket sprite
+- fertilizer crate/bucket sprite
+- juicer sprite
+- sprinkler sprite
+- modular soil states
+- carrot growth stages
+- full carrot
+- player directional sprites
+- customer sprite
+
+Nice-To-Have Next
+- rug set for shop floor zoning
+- road curb variants
+- decorative plants
+- additional crate/storage variants
+- alternate shelf states for empty/stocked look
+
+Naming Recommendation
+- Keep new files descriptive and role-based.
+- Good examples:
+  - storefront_wall_mid.png
+  - storefront_window_left.png
+  - shop_shelf_filled.png
+  - farm_soil_ready.png
+  - supply_seed_bucket.png
+  - supply_fertilizer_crate.png
+  - machine_juicer.png
+
+Implementation Note
+- The codebase is still partially using placeholder names from older systems.
+- Best long-term direction:
+  - separate map tiles, furniture, machines, characters, and items into distinct registries
+  - store directional wall variants in a proper tile atlas or config map
+  - stop overloading one generic wall or shelf sprite for multiple roles
