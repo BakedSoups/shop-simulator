@@ -1,74 +1,76 @@
-# current state 
-
-# all in mem 
-# {"items aviable 
-# cabinent 1: {capacity} 
-# cabinent 2: {capacity}, 
-# "}
-
-
-# carrot juice placed in capacity 
-# customer coems in with ask 
-# player places carot juice on cabinent 
-# farm to table 
-
-# grow carrots in the back
-# pick up the carrots 
-# juic the carots 
-
-
-# seats 
-# customer profiles
-# whats aviable 
-# custoemr randomly picks 
-
-# 
-
-
-
-# this class will be used for determining what the customer should do 
-# seats is a hash 
-
-from dataclasses import dataclass ,field
+from dataclasses import dataclass, field
 import random
 
+
 @dataclass
-class CustomerGroup: 
-    customer_id: int 
-    customer_group_range: int 
-    customer_group_count: int = field(init=False)
-
-    def __post_init__(self): 
-        self.customer_group_count = random.randint(1, self.customer_group_range) 
+class CustomerInfo:
+    id: int
+    order: list
+    indoor_seating_time: int
+    outdoor_seating_time: int
 
 
-class ResturantInfo: 
-    def __init__(self, items_available: list[str], seats: list[int], seating_waiting_time: int, outside_waiting_time: int): 
-        self.items_available = items_available 
-        self.seats = seats 
-        self.seating_waiting_time = seating_waiting_time 
-        self.outside_waiting_time = outside_waiting_time 
+@dataclass
+class CustomerGroup:
+    id: int
+    group_range: int
+    group_count: int = field(init=False)
+
+    def __post_init__(self):
+        self.group_count = random.randint(1, self.group_range)
 
 
-    def seat_customer(self, customer: CustomerGroup): 
-        if customer.customer_group_count in self.seats: 
+@dataclass
+class Table:
+    id: int
+    size: int
+    taken: bool = False
+    customers: list[CustomerInfo] = field(default_factory=list)
 
 
+class Resturant:
+    def __init__(self, items_available: list, tables: list[Table]):
+        self.items_available = items_available
+        self.tables = tables
+        self.next_customer_id = 1
+
+    def seat_customer(self, customer_group: CustomerGroup):
+        for table in self.tables:
+            if not table.taken and table.size >= customer_group.group_count:
+                table.taken = True
+
+                for _ in range(customer_group.group_count):
+                    customer = CustomerInfo(
+                        id=self.next_customer_id,
+                        order=[random.choice(self.items_available)],
+                        indoor_seating_time=5,
+                        outdoor_seating_time=5
+                    )
+
+                    self.next_customer_id += 1
+                    table.customers.append(customer)
+
+                return table.id
+
+        return None
+
+    def customer_order(self):
+        return random.choice(self.items_available)
 
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     items_available = ["grape_juice", "pumkin_juice"]
-    # postion is the seat id as well
-    # set to a  dictionary  
-    
-    seats = [4,3,2,4] 
 
-    seating_waiting_time = 10
-    outside_waiting_time = 10
-    table_max= 2
-    
-    store_actions = ResturantInfo(items_available, seats, seating_waiting_time,outside_waiting_time)
+    tables = [
+        Table(id=1, size=5),
+        Table(id=2, size=2)
+    ]
 
-    customer_1 = CustomerGroup(1, 4) 
+    store_actions = Resturant(items_available, tables)
 
-    store_actions.seat_customer(customer = customer_1)
+    customer_1 = CustomerGroup(id=1, group_range=4)
+
+    seated_table_id = store_actions.seat_customer(customer_1)
+
+    print("Seated at table:", seated_table_id)
+    print(store_actions.tables)
